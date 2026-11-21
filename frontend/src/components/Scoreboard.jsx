@@ -193,17 +193,40 @@ export default function Scoreboard({ liveState, onSwapStrike, onSelectBowler, on
         </div>
 
         {/* Current Bowler */}
-        <div className="bg-slate-900/70 border border-slate-800 rounded-xl p-3 relative">
+        <div className={`rounded-xl p-3 relative transition-all ${
+          (!bowler || replayed?.is_over_complete)
+            ? 'bg-amber-950/40 border-2 border-amber-500 shadow-lg'
+            : 'bg-slate-900/70 border border-slate-800'
+        }`}>
           <div className="flex items-center justify-between mb-1">
-            <span className="text-slate-400 font-medium text-sm">Bowler</span>
+            <span className="text-slate-400 font-medium text-sm flex items-center gap-1.5">
+              <span>{replayed?.is_over_complete ? 'Next Bowler' : 'Bowler'}</span>
+              {(!bowler || replayed?.is_over_complete) && (
+                <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30 animate-pulse">
+                  Selection Required
+                </span>
+              )}
+            </span>
             <button
               onClick={onSelectBowler}
-              className="text-[11px] px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-emerald-400 font-medium transition-colors"
+              className={`text-[11px] px-2.5 py-1 rounded font-bold transition-all shadow-sm ${
+                (!bowler || replayed?.is_over_complete)
+                  ? 'bg-amber-500 hover:bg-amber-400 text-slate-950 animate-bounce'
+                  : 'bg-slate-800 hover:bg-slate-700 text-emerald-400'
+              }`}
             >
-              Change
+              {(!bowler || replayed?.is_over_complete) ? 'Select Bowler' : 'Change'}
             </button>
           </div>
-          <div className="text-base font-bold text-slate-200 truncate">{bowler?.name || 'Select Bowler'}</div>
+          <div className="text-base font-bold text-slate-200 truncate">
+            {bowler?.name ? (
+              bowler.name
+            ) : (
+              <span className="text-amber-400 font-semibold cursor-pointer underline hover:text-amber-300" onClick={onSelectBowler}>
+                Click here to pick bowler
+              </span>
+            )}
+          </div>
           <div className="flex items-center gap-2 mt-1 text-xs text-slate-300 font-scoreboard">
             <span>O: <strong className="text-white">{bowler?.overs_str || '0.0'}</strong></span>
             <span>M: <strong className="text-white">{bowler?.maidens || 0}</strong></span>

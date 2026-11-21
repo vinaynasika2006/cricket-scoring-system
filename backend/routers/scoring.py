@@ -102,10 +102,24 @@ def get_live_state_helper(conn, match_id: str):
                 "is_consecutive_blocked": is_previous_bowler and len(bowling_players) > 1
             })
 
+    # Dismissed players cannot be incoming batsmen
+    dismissed_ids = set()
+    for w in wickets:
+        if w.get("dismissal_type") != DISMISSAL_RETIRED_HURT:
+            p_out = w.get("player_out_id")
+            if p_out:
+                dismissed_ids.add(p_out)
+
+    for b in replayed["batsman_stats"]:
+        if b.get("status") in ("out", "retired_out"):
+            dismissed_ids.add(b["player_id"])
+
     # Available incoming batsmen
     available_incoming = [
         b for b in replayed["batsman_stats"]
-        if b["status"] == "not_out" and b["player_id"] not in (striker_id, non_striker_id)
+        if b["status"] == "not_out"
+        and b["player_id"] not in (striker_id, non_striker_id)
+        and b["player_id"] not in dismissed_ids
     ]
 
     # Check match result if 2nd innings
@@ -187,8 +201,17 @@ def record_delivery(match_id: str, req: DeliveryRequest):
         non_striker_id = req.non_striker_id or replayed["current_non_striker_id"]
         bowler_id = req.bowler_id or replayed["current_bowler_id"]
 
-        if not striker_id or not non_striker_id or not bowler_id:
-            raise HTTPException(status_code=400, detail="Striker, Non-striker, and Bowler must be set before scoring")
+        if not striker_id or not non_striker_id:
+            raise HTTPException(status_code=400, detail="Striker and Non-striker must be set before scoring")
+
+        if striker_id == non_striker_id:
+            raise HTTPException(status_code=400, detail="Striker and Non-striker cannot be the same batsman")
+
+        if not bowler_id:
+            raise HTTPException(status_code=400, detail="Over is complete. Please select the next bowler before scoring.")
+
+        if bowler_id == replayed["previous_bowler_id"] and len(state["eligible_bowlers"]) > 1 and replayed.get("is_over_complete"):
+            raise HTTPException(status_code=400, detail="A bowler cannot bowl consecutive overs. Please select the next bowler.")
 
         # Calculate over number and ball in over
         legal_balls_so_far = replayed["legal_balls"]

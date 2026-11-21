@@ -489,10 +489,16 @@ class CricketEngine:
 
                 # Replace the dismissed player on the crease with incoming batsman
                 incoming_id = w_data.get("incoming_batsman_id")
+                other_batter = non_striker_id if out_player_id == striker_id else striker_id
+
+                # Verify incoming_id is not already out and not the other batter on the crease
+                if incoming_id and (incoming_id == other_batter or batsman_stats.get(incoming_id, {}).get("status") in ("out", "retired_out")):
+                    incoming_id = None
+
                 if not incoming_id and d_type_w != DISMISSAL_RETIRED_HURT:
                     for bp in batting_players:
                         bpid = bp["id"]
-                        if bpid != striker_id and bpid != non_striker_id and batsman_stats.get(bpid, {}).get("status") == "not_out":
+                        if bpid != other_batter and bpid != out_player_id and batsman_stats.get(bpid, {}).get("status") == "not_out":
                             incoming_id = bpid
                             break
 
@@ -568,34 +574,75 @@ class CricketEngine:
 
         # Current over status: has the current over reached 6 legal balls?
         current_over_balls = legal_balls % 6
-        is_over_complete = (len(deliveries) > 0 and current_over_balls == 0 and deliveries[-1].get("is_legal", True))
+        over_just_finished = (len(deliveries) > 0 and current_over_balls == 0 and deliveries[-1].get("is_legal", True))
+
+        # Determine active bowler
+        if over_just_finished:
+            # Over just completed. The bowler of that completed over is previous_bowler_id
+            previous_bowler_id = deliveries[-1].get("bowler_id")
+            # If user explicitly selected a different bowler for the next over, use it:
+            cand_bowler = innings_info.get("current_bowler_id")
+            if cand_bowler and cand_bowler != previous_bowler_id:
+                current_bowler_id = cand_bowler
+                is_over_complete = False
+            else:
+                current_bowler_id = None
+                is_over_complete = True
+        else:
+            is_over_complete = False
+            if len(deliveries) > 0:
+                current_bowler_id = deliveries[-1].get("bowler_id") or innings_info.get("current_bowler_id")
+            else:
+                current_bowler_id = innings_info.get("current_bowler_id") or innings_info.get("opening_bowler_id")
+                previous_bowler_id = None
+
+        # Mark all dismissed players from wickets records as out in batsman_stats
+        dismissed_ids = set()
+        for w in wickets:
+            if w.get("dismissal_type") != DISMISSAL_RETIRED_HURT:
+                p_out = w.get("player_out_id")
+                if p_out:
+                    dismissed_ids.add(p_out)
+                    if p_out in batsman_stats:
+                        batsman_stats[p_out]["status"] = "out"
 
         # Safeguard: Ensure active striker and non-striker are never pointing to dismissed players
-        if batsman_stats.get(striker_id, {}).get("status") in ("out", "retired_out") and not all_out:
+        if (striker_id in dismissed_ids or batsman_stats.get(striker_id, {}).get("status") in ("out", "retired_out")) and not all_out:
             cand = innings_info.get("current_striker_id")
-            if cand and batsman_stats.get(cand, {}).get("status") == "not_out" and cand != non_striker_id:
+            if cand and cand not in dismissed_ids and cand != non_striker_id and batsman_stats.get(cand, {}).get("status") in ("not_out", "batting"):
                 striker_id = cand
             else:
+                striker_id = None
                 for bp in batting_players:
                     bpid = bp["id"]
-                    if bpid != non_striker_id and batsman_stats.get(bpid, {}).get("status") == "not_out":
+                    if bpid != non_striker_id and bpid not in dismissed_ids and batsman_stats.get(bpid, {}).get("status") in ("not_out", "batting"):
                         striker_id = bpid
                         break
             if striker_id and striker_id in batsman_stats:
                 batsman_stats[striker_id]["status"] = "batting"
 
-        if batsman_stats.get(non_striker_id, {}).get("status") in ("out", "retired_out") and not all_out:
+        if (non_striker_id in dismissed_ids or batsman_stats.get(non_striker_id, {}).get("status") in ("out", "retired_out")) and not all_out:
             cand = innings_info.get("current_non_striker_id")
-            if cand and batsman_stats.get(cand, {}).get("status") == "not_out" and cand != striker_id:
+            if cand and cand not in dismissed_ids and cand != striker_id and batsman_stats.get(cand, {}).get("status") in ("not_out", "batting"):
                 non_striker_id = cand
             else:
+                non_striker_id = None
                 for bp in batting_players:
                     bpid = bp["id"]
-                    if bpid != striker_id and batsman_stats.get(bpid, {}).get("status") == "not_out":
+                    if bpid != striker_id and bpid not in dismissed_ids and batsman_stats.get(bpid, {}).get("status") in ("not_out", "batting"):
                         non_striker_id = bpid
                         break
             if non_striker_id and non_striker_id in batsman_stats:
                 batsman_stats[non_striker_id]["status"] = "batting"
+
+        # Safeguard: Striker and Non-striker must NEVER be the same person!
+        if striker_id and non_striker_id and striker_id == non_striker_id and not all_out:
+            for bp in batting_players:
+                bpid = bp["id"]
+                if bpid != striker_id and bpid not in dismissed_ids and batsman_stats.get(bpid, {}).get("status") in ("not_out", "batting"):
+                    non_striker_id = bpid
+                    batsman_stats[non_striker_id]["status"] = "batting"
+                    break
 
         return {
             "total_runs": total_runs,

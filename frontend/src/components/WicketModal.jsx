@@ -45,16 +45,37 @@ export default function WicketModal({
 
   const currentDismissalObj = DISMISSALS.find(d => d.id === dismissalType);
 
-  // Filter available incoming batters to exclude the one currently getting out
-  const incomingCandidates = (available_incoming || []).filter(b => b.player_id !== playerOutId);
+  // Filter available incoming batters to exclude:
+  // 1. The batsman currently getting out (playerOutId)
+  // 2. The other batsman who stays on the crease
+  // 3. Anyone who is already dismissed ('out' or 'retired_out')
+  const otherBatterId = playerOutId === striker?.player_id ? non_striker?.player_id : striker?.player_id;
+  const incomingCandidates = (available_incoming || []).filter(b => 
+    b.player_id !== playerOutId &&
+    b.player_id !== otherBatterId &&
+    b.status !== 'out' &&
+    b.status !== 'retired_out'
+  );
+
+  const handleSelectPlayerOut = (id) => {
+    setPlayerOutId(id);
+    const otherId = id === striker?.player_id ? non_striker?.player_id : striker?.player_id;
+    const valid = (available_incoming || []).filter(b => 
+      b.player_id !== id && b.player_id !== otherId && b.status !== 'out' && b.status !== 'retired_out'
+    );
+    setSelectedIncomingId(valid[0]?.player_id || '');
+  };
 
   // Sync state whenever modal opens or striker changes
   React.useEffect(() => {
     if (isOpen) {
       const outId = striker?.player_id || '';
       setPlayerOutId(outId);
-      const nextCand = (available_incoming || []).find(b => b.player_id !== outId);
-      setSelectedIncomingId(nextCand?.player_id || '');
+      const otherId = non_striker?.player_id || '';
+      const validCands = (available_incoming || []).filter(b => 
+        b.player_id !== outId && b.player_id !== otherId && b.status !== 'out' && b.status !== 'retired_out'
+      );
+      setSelectedIncomingId(validCands[0]?.player_id || '');
       setStep('select');
       setDismissalType('bowled');
       setErrorMessage('');
@@ -211,12 +232,12 @@ export default function WicketModal({
               {/* Dismissed Batsman Picker */}
               <div>
                 <label className="block text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                  Dismissed Batsman
+                  Dismissed Batsman (Choose who got out)
                 </label>
                 <div className="grid grid-cols-2 gap-3">
                   <button
                     type="button"
-                    onClick={() => setPlayerOutId(striker?.player_id || '')}
+                    onClick={() => handleSelectPlayerOut(striker?.player_id || '')}
                     className={`p-3 rounded-xl border text-left transition-all ${
                       playerOutId === striker?.player_id
                         ? 'bg-red-500/20 border-red-500 text-white shadow-md'
@@ -225,22 +246,24 @@ export default function WicketModal({
                   >
                     <div className="text-xs font-medium text-emerald-400">Striker *</div>
                     <div className="text-sm font-bold text-white truncate">{striker?.name}</div>
-                    <div className="text-[11px] text-slate-400 mt-1">{striker?.runs} ({striker?.balls_faced} balls)</div>
+                    <div className="text-[11px] text-slate-400 mt-1">{striker?.runs || 0} ({striker?.balls_faced || 0} balls)</div>
                   </button>
 
-                  <button
-                    type="button"
-                    onClick={() => setPlayerOutId(non_striker?.player_id || '')}
-                    className={`p-3 rounded-xl border text-left transition-all ${
-                      playerOutId === non_striker?.player_id
-                        ? 'bg-red-500/20 border-red-500 text-white shadow-md'
-                        : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="text-xs font-medium text-slate-400">Non-Striker</div>
-                    <div className="text-sm font-bold text-white truncate">{non_striker?.name}</div>
-                    <div className="text-[11px] text-slate-400 mt-1">{non_striker?.runs} ({non_striker?.balls_faced} balls)</div>
-                  </button>
+                  {non_striker && non_striker.player_id !== striker?.player_id && (
+                    <button
+                      type="button"
+                      onClick={() => handleSelectPlayerOut(non_striker?.player_id || '')}
+                      className={`p-3 rounded-xl border text-left transition-all ${
+                        playerOutId === non_striker?.player_id
+                          ? 'bg-red-500/20 border-red-500 text-white shadow-md'
+                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="text-xs font-medium text-slate-400">Non-Striker</div>
+                      <div className="text-sm font-bold text-white truncate">{non_striker?.name}</div>
+                      <div className="text-[11px] text-slate-400 mt-1">{non_striker?.runs || 0} ({non_striker?.balls_faced || 0} balls)</div>
+                    </button>
+                  )}
                 </div>
               </div>
 

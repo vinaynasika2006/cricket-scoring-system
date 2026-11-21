@@ -267,8 +267,10 @@ export default function LiveScoring({ matchId, onNavigateTab, onStartNewMatch })
         onScoreDelivery={handleScoreDelivery}
         onOpenWicket={() => setShowWicketModal(true)}
         onOpenPenalty={() => setShowPenaltyModal(true)}
+        onOpenBowlerSelect={() => setShowOverChangeModal(true)}
         onUndo={handleUndo}
         disabled={liveState?.match?.status === 'completed'}
+        needsBowler={Boolean(liveState?.replayed?.is_over_complete || !liveState?.bowler)}
       />
 
       {/* Batting and Bowling Scorecards Grid */}
@@ -302,7 +304,9 @@ export default function LiveScoring({ matchId, onNavigateTab, onStartNewMatch })
         isOpen={showOverChangeModal}
         eligibleBowlers={liveState?.eligible_bowlers || []}
         previousBowlerId={liveState?.replayed?.previous_bowler_id}
+        isOverComplete={Boolean(liveState?.replayed?.is_over_complete)}
         onSelectBowler={handleSelectBowler}
+        onClose={() => setShowOverChangeModal(false)}
       />
 
       {/* 2nd Innings Transition Modal */}
